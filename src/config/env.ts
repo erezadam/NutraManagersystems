@@ -1,0 +1,61 @@
+export interface RuntimeEnv {
+  VITE_DATA_PROVIDER?: 'firebase' | 'base44';
+  VITE_BASE44_SERVER_URL: string;
+  VITE_BASE44_APP_ID: string;
+  VITE_BASE44_FUNCTIONS_VERSION?: string;
+  VITE_BASE44_ACCESS_TOKEN?: string;
+  VITE_FIREBASE_API_KEY?: string;
+  VITE_FIREBASE_AUTH_DOMAIN?: string;
+  VITE_FIREBASE_PROJECT_ID?: string;
+  VITE_FIREBASE_STORAGE_BUCKET?: string;
+  VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
+  VITE_FIREBASE_APP_ID?: string;
+  VITE_FIREBASE_MEASUREMENT_ID?: string;
+  VITE_DEFAULT_USER_ROLE?: 'admin' | 'user';
+  VITE_AI_ENDPOINT_URL?: string;
+  VITE_AI_ENDPOINT_TOKEN?: string;
+}
+
+export function getRuntimeEnv(): RuntimeEnv {
+  const raw = import.meta.env as Record<string, string | undefined>;
+  const defaults: RuntimeEnv = {
+    VITE_BASE44_SERVER_URL: 'https://base44.app',
+    VITE_BASE44_APP_ID: '6926c8ba462c334e960f2a2c',
+    VITE_DEFAULT_USER_ROLE: 'admin'
+  };
+
+  return {
+    VITE_DATA_PROVIDER: raw.VITE_DATA_PROVIDER as RuntimeEnv['VITE_DATA_PROVIDER'],
+    VITE_BASE44_SERVER_URL: raw.VITE_BASE44_SERVER_URL || defaults.VITE_BASE44_SERVER_URL,
+    VITE_BASE44_APP_ID: raw.VITE_BASE44_APP_ID || defaults.VITE_BASE44_APP_ID,
+    VITE_BASE44_FUNCTIONS_VERSION: raw.VITE_BASE44_FUNCTIONS_VERSION,
+    VITE_BASE44_ACCESS_TOKEN: raw.VITE_BASE44_ACCESS_TOKEN,
+    VITE_FIREBASE_API_KEY: raw.VITE_FIREBASE_API_KEY,
+    VITE_FIREBASE_AUTH_DOMAIN: raw.VITE_FIREBASE_AUTH_DOMAIN,
+    VITE_FIREBASE_PROJECT_ID: raw.VITE_FIREBASE_PROJECT_ID,
+    VITE_FIREBASE_STORAGE_BUCKET: raw.VITE_FIREBASE_STORAGE_BUCKET,
+    VITE_FIREBASE_MESSAGING_SENDER_ID: raw.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    VITE_FIREBASE_APP_ID: raw.VITE_FIREBASE_APP_ID,
+    VITE_FIREBASE_MEASUREMENT_ID: raw.VITE_FIREBASE_MEASUREMENT_ID,
+    VITE_DEFAULT_USER_ROLE: (raw.VITE_DEFAULT_USER_ROLE as RuntimeEnv['VITE_DEFAULT_USER_ROLE']) || defaults.VITE_DEFAULT_USER_ROLE,
+    VITE_AI_ENDPOINT_URL: raw.VITE_AI_ENDPOINT_URL,
+    VITE_AI_ENDPOINT_TOKEN: raw.VITE_AI_ENDPOINT_TOKEN
+  };
+}
+
+export function hasFirebaseConfig(env: RuntimeEnv): boolean {
+  return Boolean(
+    env.VITE_FIREBASE_API_KEY &&
+      env.VITE_FIREBASE_AUTH_DOMAIN &&
+      env.VITE_FIREBASE_PROJECT_ID &&
+      env.VITE_FIREBASE_STORAGE_BUCKET &&
+      env.VITE_FIREBASE_MESSAGING_SENDER_ID &&
+      env.VITE_FIREBASE_APP_ID
+  );
+}
+
+export function shouldUseFirebase(env: RuntimeEnv): boolean {
+  if (env.VITE_DATA_PROVIDER === 'firebase') return true;
+  if (env.VITE_DATA_PROVIDER === 'base44') return false;
+  return hasFirebaseConfig(env);
+}
