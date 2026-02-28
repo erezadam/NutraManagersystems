@@ -288,7 +288,7 @@ isMigratingFoods: boolean
 **ישויות נקראות:** User
 **ישויות מתעדכנות:** User (update role)
 
-**Mutation:** updateRoleMutation → base44.entities.User.update(userId, { role })
+**Mutation:** updateRoleMutation → firestore(User).update(userId, { role })
 
 **ערכי Role תקינים:** admin, user (+ כל custom role שיוגדר ב-User.json)
 
@@ -503,7 +503,7 @@ Output JSON Schema: {
 
 ## 🔑 נקודות ארכיטקטורה חשובות למפתח חדש
 
-1. **Base44 SDK** — כל קריאות ה-DB דרך base44.entities.EntityName.list/create/update/delete
+1. **Firebase SDK** — כל קריאות ה-DB דרך Firestore collections
 2. **RTL** — כל הממשק בעברית, dir="rtl" על ה-Layout wrapper
 3. **Bi-directional sync** — DeficiencySymptom ↔ Food מסונכרנים ידנית בקוד (לא ב-DB)
 4. **Vitamin data flattening** — חלק מהרשומות הישנות שמרו נתונים תחת vitamin.data.X, הקוד מבצע { ...vitamin, ...vitamin.data } בכמה מקומות
@@ -695,34 +695,34 @@ Output JSON Schema: {
 
 ### Login Flow
 ```
-1. משתמש לא מחובר ← Base44 מנהל redirect לדף login מובנה
-2. Base44 מאמת credentials
-3. Session נשמרת (cookie/token מנוהל ע"י Base44)
+1. משתמש לא מחובר ← Firebase Auth פותח תהליך התחברות
+2. Firebase Auth מאמת credentials/anonymous sign-in
+3. Session נשמרת ומנוהלת ע"י Firebase Auth
 4. Redirect חזרה לאפליקציה
 ```
 
 ### Logout Flow
 ```
-base44.auth.logout(redirectUrl?) → מנקה session → redirect
+firebase.auth.signOut() → מנקה session → redirect
 (לא בשימוש בפרויקט זה — אין כפתור logout גלוי בממשק)
 ```
 
 ### Session Handling
-- ניהול session: **מלא ע"י Base44** — האפליקציה לא מנהלת tokens ישירות
-- קריאת משתמש נוכחי: `base44.auth.me()` — Promise מחזיר User object
+- ניהול session: **מלא ע"י Firebase Auth** — האפליקציה לא מנהלת tokens ישירות
+- קריאת משתמש נוכחי: `firebase.auth.currentUser` + מסמך `User/{uid}`
 - נשמר ב-React Query cache: `queryKey: ['currentUser']`
 - **לא נשמר ב-localStorage/sessionStorage** ע"י הקוד
 
 ### Roles Source
-- Role מוגדר ב-Base44 `User` entity בשדה `role`
+- Role מוגדר ב-`User` collection בשדה `role`
 - ברירת מחדל: `'user'`
-- שינוי role: דרך UserManagement → `base44.entities.User.update(id, { role })`
+- שינוי role: דרך UserManagement → `firestore(User).update(id, { role })`
 - ערכים תקינים בקוד: `'admin'`, `'user'`
 
 ### כשלון Auth
 ```
-base44.auth.me() → throw error if not authenticated
-→ Base44 מנהל redirect לדף login אוטומטית
+firebase.auth.currentUser === null
+→ Redirect/login לפי Firebase Auth flow
 → האפליקציה לא מכילה error boundary ספציפי לauth
 → אם currentUser undefined: admin-only features מוסתרות (guards)
 ```
@@ -735,18 +735,18 @@ base44.auth.me() → throw error if not authenticated
 
 | מיקום בקוד | Entity קשור | שדה יעד | מה מועלה | מבנה URL |
 |---|---|---|---|---|
-| `components/foods/FoodForm.js` | Food | `imageUrl` | קובץ תמונה (image/*) | Base44 CDN URL |
+| `components/foods/FoodForm.js` | Food | `imageUrl` | קובץ תמונה (image/*) | Firebase Storage URL |
 
 ### תהליך Upload
 ```js
 // FoodForm.js - handleImageUpload()
-const { file_url } = await base44.integrations.Core.UploadFile({ file });
-handleChange('imageUrl', file_url);
-// → שומר file_url על food.imageUrl
+const fileUrl = await firebase.storage.upload(file);
+handleChange('imageUrl', fileUrl);
+// → שומר fileUrl על food.imageUrl
 ```
 
 ### מגבלות ידועות מהקוד
-- **אין** הגבלת גודל מוגדרת בקוד (Base44 מגביל בצד שרת)
+- **אין** הגבלת גודל מוגדרת בקוד (מוגבל לפי כללי Firebase Storage)
 - **אין** validation של סוג קובץ מעבר ל-`accept="image/*"`
 - **error handling:** `console.error('Upload failed:', error)` בלבד — שגיאה שקטה למשתמש
 - הרשאות גישה לקבצים: public URL (כל מי שיש לו את ה-URL יכול לגשת)
@@ -1116,7 +1116,7 @@ const vitaminId = urlParams.get('id');
 ```js
 const { data: users = [] } = useQuery({
   queryKey: ['users'],
-  queryFn: () => base44.entities.User.list(),
+  queryFn: () => firestore(User).list(),
   enabled: currentUser?.role === 'admin',
 });
 // ⚠️ אם currentUser טוען (undefined), enabled=false → users=[]
@@ -1541,7 +1541,7 @@ if (Array.isArray(data) && data.length > 0 && data[0].תסמין_חוסר && dat
 
 ```
 1. LOAD:
-   currentUser = base44.auth.me() → check role
+   currentUser = firebase.auth.currentUser + User doc lookup → check role
    role !== 'admin' → render Guard (access denied component)
    role === 'admin' → useQuery(['users']) → User.list()
 

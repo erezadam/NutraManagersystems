@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 - כתובת ברירת מחדל: `http://localhost:5173`
-- מצב ברירת מחדל לפריסה: `VITE_DATA_PROVIDER=firebase`
+- מצב ברירת מחדל לפריסה: Firebase בלבד
 
 ## בנייה
 ```bash

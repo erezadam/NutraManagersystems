@@ -51,6 +51,13 @@ function toPayload(form: FoodFormState): Partial<Food> {
   };
 }
 
+function labelsAsText(ids: string[] | undefined, nameById: Map<string, string>): string {
+  const labels = asArray(ids)
+    .map((id) => nameById.get(id) ?? id)
+    .sort((a, b) => a.localeCompare(b, 'he'));
+  return labels.join(', ');
+}
+
 export default function FoodsPage() {
   const foodsList = useEntityList(foodService, 'created_date desc');
   const symptomsList = useEntityList(deficiencySymptomService, 'symptomNameHe asc');
@@ -85,6 +92,8 @@ export default function FoodsPage() {
         .sort((a, b) => a.label.localeCompare(b.label, 'he')),
     [symptomsList.items]
   );
+
+  const symptomNameById = useMemo(() => new Map(symptomsList.items.map((symptom) => [symptom.id, symptom.symptomNameHe || symptom.id])), [symptomsList.items]);
 
   function openCreate() {
     setEditing(null);
@@ -299,7 +308,13 @@ export default function FoodsPage() {
                   <td>
                     <ExpandableText value={food.description} emptyLabel="-" popupTitle="תיאור" />
                   </td>
-                  <td>{food.deficiencySymptoms?.length ?? 0}</td>
+                  <td>
+                    <ExpandableText
+                      value={labelsAsText(food.deficiencySymptoms, symptomNameById)}
+                      emptyLabel="-"
+                      popupTitle="תסמיני חסר"
+                    />
+                  </td>
                   <td>{formatDate(food.updated_date)}</td>
                   <td className="action-cell">
                     <button type="button" className="btn ghost" onClick={() => openEdit(food)}>

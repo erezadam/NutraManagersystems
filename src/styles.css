@@ -302,24 +302,37 @@ body {
 
 .table-wrap {
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.sticky-head-wrap {
+  max-height: none;
+  overflow: visible;
+  position: relative;
+}
+
+.sticky-head-wrap .data-table th {
+  top: 0;
 }
 
 .data-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 2800px;
-  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
 }
 
 .data-table th,
 .data-table td {
   border-bottom: 1px solid #dde4e8;
   text-align: right;
-  padding: 0.55rem;
+  padding: 0.4rem 0.5rem;
   vertical-align: top;
-  min-width: 160px;
+  min-width: 110px;
   background: #fff;
+  line-height: 1.28;
 }
 
 .data-table th {
@@ -327,7 +340,7 @@ body {
   font-size: 0.92rem;
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 6;
   background: #f8fbff;
 }
 
@@ -336,18 +349,18 @@ body {
   right: 0;
   z-index: 4;
   background: #fffdfa;
-  min-width: 220px;
+  min-width: 170px;
   box-shadow: -8px 0 10px -10px rgb(21 32 44 / 45%);
 }
 
 .data-table th.sticky-col {
-  z-index: 5;
+  z-index: 7;
   background: #f3f8ff;
 }
 
 .action-cell {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.25rem;
   flex-wrap: wrap;
 }
 
@@ -761,6 +774,7 @@ body {
   text-align: right;
   font: inherit;
   color: inherit;
+  line-height: 1.25;
 }
 
 .expandable-trigger.is-overflowing {
@@ -773,6 +787,7 @@ body {
   overflow: hidden;
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.25;
 }
 
 .expandable-hint {

@@ -10,16 +10,8 @@ cp .env.example .env
 ```
 
 ## Data Provider
-The app supports two providers:
-- `firebase` (recommended for cloud deployment)
-- `base44` (fallback during migration)
-
-Set in `.env`:
-```bash
-VITE_DATA_PROVIDER=firebase
-```
-
-For Firebase mode you must set all `VITE_FIREBASE_*` vars from your Firebase project settings.
+The app is Firebase-only.
+Set all `VITE_FIREBASE_*` vars from your Firebase project settings.
 
 ## Run
 ```bash

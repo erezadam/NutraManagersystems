@@ -42,6 +42,13 @@ function toPayload(form: SymptomFormState): Partial<DeficiencySymptom> {
   };
 }
 
+function labelsAsText(ids: string[] | undefined, nameById: Map<string, string>): string {
+  const labels = asArray(ids)
+    .map((id) => nameById.get(id) ?? id)
+    .sort((a, b) => a.localeCompare(b, 'he'));
+  return labels.join(', ');
+}
+
 export default function DeficiencySymptomsPage() {
   const symptomsList = useEntityList(deficiencySymptomService, 'created_date desc');
   const foodsList = useEntityList(foodService, 'foodNameHe asc');
@@ -83,6 +90,16 @@ export default function DeficiencySymptomsPage() {
       foodsList.items
         .map((food: Food) => ({ id: food.id, label: food.foodNameHe }))
         .sort((a, b) => a.label.localeCompare(b.label, 'he')),
+    [foodsList.items]
+  );
+
+  const vitaminNameById = useMemo(
+    () => new Map(vitaminsList.items.map((vitamin) => [vitamin.id, vitamin.vitaminNameHe || vitamin.vitaminNameEn || vitamin.vitaminNickHe || vitamin.id])),
+    [vitaminsList.items]
+  );
+
+  const foodNameById = useMemo(
+    () => new Map(foodsList.items.map((food) => [food.id, food.foodNameHe || food.foodNameEn || food.id])),
     [foodsList.items]
   );
 
@@ -324,8 +341,12 @@ export default function DeficiencySymptomsPage() {
                   <td>
                     <ExpandableText value={asArray(symptom.tags).join(', ')} emptyLabel="-" popupTitle="תגיות" />
                   </td>
-                  <td>{symptom.vitaminIds?.length ?? 0}</td>
-                  <td>{symptom.foodIds?.length ?? 0}</td>
+                  <td>
+                    <ExpandableText value={labelsAsText(symptom.vitaminIds, vitaminNameById)} emptyLabel="-" popupTitle="תוספים" />
+                  </td>
+                  <td>
+                    <ExpandableText value={labelsAsText(symptom.foodIds, foodNameById)} emptyLabel="-" popupTitle="מזונות" />
+                  </td>
                   <td>{formatDate(symptom.updated_date)}</td>
                   <td className="action-cell">
                     <button type="button" className="btn ghost" onClick={() => openEdit(symptom)}>

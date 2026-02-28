@@ -18,6 +18,125 @@ function byHebrew(a: string, b: string): number {
   return a.localeCompare(b, 'he');
 }
 
+function hasHebrew(value: string): boolean {
+  return /[\u0590-\u05FF]/.test(value);
+}
+
+function stripParentheses(value: string): string {
+  return value.replace(/\([^)]*\)/g, ' ');
+}
+
+function shortenHebrewSupplementName(value: string): string {
+  const compact = stripParentheses(value).replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!compact) return '';
+
+  const hyphenMatch = compact.match(/(?<=[\u0590-\u05FF])\s*[-–—]\s*(?=[\u0590-\u05FF])/u);
+  if (hyphenMatch && hyphenMatch.index !== undefined) {
+    return compact.slice(0, hyphenMatch.index).trim();
+  }
+
+  return compact.trim();
+}
+
+function isPlaceholderText(value: string): boolean {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return /^[-–—]+$/.test(normalized);
+}
+
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    if (isPlaceholderText(trimmed)) continue;
+    return trimmed;
+  }
+  return '';
+}
+
+function resolveVitaminNameHe(vitamin: Vitamin): string {
+  const row = vitamin as unknown as Record<string, unknown>;
+  const legacy = typeof row.data === 'object' && row.data !== null ? (row.data as Record<string, unknown>) : undefined;
+  return firstNonEmptyString(
+    row.vitaminNameHe,
+    legacy?.vitaminNameHe,
+    row.vitamin_name_he,
+    legacy?.vitamin_name_he,
+    row.nameHe,
+    legacy?.nameHe,
+    row.name_he,
+    legacy?.name_he,
+    row.vitaminNickHe,
+    legacy?.vitaminNickHe,
+    row.name,
+    row.vitaminNameEn,
+    legacy?.vitaminNameEn,
+    row.nameEn
+  );
+}
+
+function resolveVitaminNameEn(vitamin: Vitamin): string {
+  const row = vitamin as unknown as Record<string, unknown>;
+  const legacy = typeof row.data === 'object' && row.data !== null ? (row.data as Record<string, unknown>) : undefined;
+  return firstNonEmptyString(
+    row.vitaminNameEn,
+    legacy?.vitaminNameEn,
+    row.vitamin_name_en,
+    legacy?.vitamin_name_en,
+    row.nameEn,
+    legacy?.nameEn,
+    row.name_en
+  );
+}
+
+function resolveActiveForm(vitamin: Vitamin): string {
+  const row = vitamin as unknown as Record<string, unknown>;
+  const legacy = typeof row.data === 'object' && row.data !== null ? (row.data as Record<string, unknown>) : undefined;
+  return firstNonEmptyString(row.activeForm, legacy?.activeForm, row.active_form, legacy?.active_form);
+}
+
+function resolveVitaminNickHe(vitamin: Vitamin): string {
+  const row = vitamin as unknown as Record<string, unknown>;
+  const legacy = typeof row.data === 'object' && row.data !== null ? (row.data as Record<string, unknown>) : undefined;
+  return firstNonEmptyString(
+    row.vitaminNickHe,
+    legacy?.vitaminNickHe,
+    row.vitamin_nick_he,
+    legacy?.vitamin_nick_he,
+    row.scientificNameHe,
+    legacy?.scientificNameHe,
+    resolveVitaminNameHe(vitamin)
+  );
+}
+
+function resolveVitaminNickEn(vitamin: Vitamin): string {
+  const row = vitamin as unknown as Record<string, unknown>;
+  const legacy = typeof row.data === 'object' && row.data !== null ? (row.data as Record<string, unknown>) : undefined;
+  return firstNonEmptyString(
+    row.vitaminNickEn,
+    legacy?.vitaminNickEn,
+    row.vitamin_nick_en,
+    legacy?.vitamin_nick_en,
+    row.scientificNameEn,
+    legacy?.scientificNameEn,
+    resolveVitaminNameEn(vitamin)
+  );
+}
+
+function resolveDisplayNameHe(vitamin: Vitamin): string {
+  const primary = resolveVitaminNameHe(vitamin);
+  const scientificHe = resolveVitaminNickHe(vitamin);
+  if (primary && hasHebrew(primary)) return shortenHebrewSupplementName(primary);
+  if (scientificHe && hasHebrew(scientificHe)) return shortenHebrewSupplementName(scientificHe);
+  return firstNonEmptyString(
+    shortenHebrewSupplementName(primary),
+    shortenHebrewSupplementName(scientificHe),
+    resolveVitaminNameEn(vitamin),
+    resolveVitaminNickEn(vitamin),
+    vitamin.id
+  );
+}
+
 function labelsFromIds(ids: string[] | undefined, nameById: Map<string, string>): string[] {
   return asArray(ids)
     .map((id) => nameById.get(id) ?? id)
@@ -30,7 +149,7 @@ function renderExpandableCell(value?: string | null, popupTitle = 'תוכן מל
 
 export default function VitaminsPage() {
   const navigate = useNavigate();
-  const { items, loading, error, reload } = useEntityList(vitaminService, 'created_date desc');
+  const { items, loading, error, reload } = useEntityList(vitaminService);
   const symptomsList = useEntityList(deficiencySymptomService, 'symptomNameHe asc');
   const foodsList = useEntityList(foodService, 'foodNameHe asc');
   const [query, setQuery] = useState('');
@@ -49,11 +168,25 @@ export default function VitaminsPage() {
     const term = query.trim().toLowerCase();
     if (!term) return items;
     return items.filter((vitamin) =>
-      [vitamin.vitaminNameHe, vitamin.vitaminNameEn, vitamin.activeForm]
+      [
+        resolveDisplayNameHe(vitamin),
+        resolveVitaminNameEn(vitamin),
+        resolveVitaminNickHe(vitamin),
+        resolveVitaminNickEn(vitamin),
+        resolveActiveForm(vitamin)
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term))
     );
   }, [items, query]);
+
+  const visibleItems = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const nameA = firstNonEmptyString(resolveDisplayNameHe(a), resolveVitaminNameEn(a), a.id);
+      const nameB = firstNonEmptyString(resolveDisplayNameHe(b), resolveVitaminNameEn(b), b.id);
+      return byHebrew(nameA, nameB);
+    });
+  }, [filtered]);
 
   const symptomNameById = useMemo(
     () => new Map(symptomsList.items.map((symptom) => [symptom.id, symptom.symptomNameHe])),
@@ -62,7 +195,7 @@ export default function VitaminsPage() {
 
   const foodNameById = useMemo(() => new Map(foodsList.items.map((food) => [food.id, food.foodNameHe])), [foodsList.items]);
 
-  const vitaminNameById = useMemo(() => new Map(items.map((vitamin) => [vitamin.id, vitamin.vitaminNameHe])), [items]);
+  const vitaminNameById = useMemo(() => new Map(items.map((vitamin) => [vitamin.id, resolveDisplayNameHe(vitamin)])), [items]);
 
   async function onDeleteConfirm() {
     if (!deleteTarget) return;
@@ -82,17 +215,17 @@ export default function VitaminsPage() {
   }
 
   function exportJson() {
-    downloadText(`vitamins_${Date.now()}.json`, JSON.stringify(filtered, null, 2), 'application/json');
+    downloadText(`vitamins_${Date.now()}.json`, JSON.stringify(visibleItems, null, 2), 'application/json');
   }
 
   function exportCsv() {
     const csv = toCsv([
       ['id', 'vitaminNameHe', 'vitaminNameEn', 'activeForm', 'solubility', 'updated_date'],
-      ...filtered.map((vitamin) => [
+      ...visibleItems.map((vitamin) => [
         vitamin.id,
-        vitamin.vitaminNameHe ?? '',
-        vitamin.vitaminNameEn ?? '',
-        vitamin.activeForm ?? '',
+        resolveDisplayNameHe(vitamin),
+        resolveVitaminNameEn(vitamin),
+        resolveActiveForm(vitamin),
         vitamin.solubility ?? '',
         vitamin.updated_date ?? ''
       ])
@@ -105,7 +238,7 @@ export default function VitaminsPage() {
     const rows = await parseImportFile(file);
     const knownByName = new Set(
       items
-        .flatMap((vitamin) => [vitamin.vitaminNameHe, vitamin.vitaminNameEn])
+        .flatMap((vitamin) => [resolveDisplayNameHe(vitamin), resolveVitaminNameEn(vitamin)])
         .filter(Boolean)
         .map((value) => String(value).trim().toLowerCase())
     );
@@ -191,10 +324,10 @@ export default function VitaminsPage() {
         </button>
       </div>
 
-      <StateView loading={loading} error={error} empty={filtered.length === 0} emptyLabel="לא נמצאו תוספים." />
+      <StateView loading={loading} error={error} empty={visibleItems.length === 0} emptyLabel="לא נמצאו תוספים." />
 
-      {!loading && !error && filtered.length > 0 ? (
-        <div className="panel table-wrap">
+      {!loading && !error && visibleItems.length > 0 ? (
+        <div className="panel table-wrap sticky-head-wrap">
           <table className="data-table">
             <thead>
               <tr>
@@ -230,7 +363,7 @@ export default function VitaminsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((vitamin) => {
+              {visibleItems.map((vitamin) => {
                 const symptoms = labelsFromIds(vitamin.deficiencySymptoms, symptomNameById).join(', ');
                 const foods = labelsFromIds(vitamin.foodSources, foodNameById).join(', ');
                 const combinations = labelsFromIds(vitamin.combinationVitaminIds, vitaminNameById).join(', ');
@@ -245,13 +378,13 @@ export default function VitaminsPage() {
                         className="text-link"
                         onClick={() => navigate(`/VitaminEdit?id=${encodeURIComponent(vitamin.id)}`)}
                       >
-                        {vitamin.vitaminNameHe}
+                        {firstNonEmptyString(resolveDisplayNameHe(vitamin), resolveVitaminNameEn(vitamin), '-')}
                       </button>
                     </td>
-                    <td>{renderExpandableCell(vitamin.vitaminNameEn, 'שם באנגלית')}</td>
-                    <td>{renderExpandableCell(vitamin.vitaminNickHe, 'שם מדעי עברית')}</td>
-                    <td>{renderExpandableCell(vitamin.vitaminNickEn, 'שם מדעי אנגלית')}</td>
-                    <td>{renderExpandableCell(vitamin.activeForm, 'צורה פעילה')}</td>
+                    <td>{renderExpandableCell(resolveVitaminNameEn(vitamin), 'שם באנגלית')}</td>
+                    <td>{renderExpandableCell(resolveVitaminNickHe(vitamin), 'שם מדעי עברית')}</td>
+                    <td>{renderExpandableCell(resolveVitaminNickEn(vitamin), 'שם מדעי אנגלית')}</td>
+                    <td>{renderExpandableCell(resolveActiveForm(vitamin), 'צורה פעילה')}</td>
                     <td>{renderExpandableCell(vitamin.solubility, 'מסיסות')}</td>
                     <td>{renderExpandableCell(vitamin.source, 'נוצר')}</td>
                     <td>{renderExpandableCell(vitamin.dosageUpTo1Year, 'עד שנה')}</td>
@@ -305,7 +438,7 @@ export default function VitaminsPage() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="מחיקת תוסף"
-        message={`למחוק את "${deleteTarget?.vitaminNameHe}"?`}
+        message={`למחוק את "${deleteTarget ? firstNonEmptyString(resolveDisplayNameHe(deleteTarget), resolveVitaminNameEn(deleteTarget), deleteTarget.id) : ''}"?`}
         confirmLabel={busyDelete ? 'מוחק...' : 'מחק'}
         onConfirm={() => void onDeleteConfirm()}
         onCancel={() => {
@@ -347,9 +480,9 @@ export default function VitaminsPage() {
               onChange={(event) => setAiTargetId(event.target.value)}
             >
               <option value="">ללא</option>
-              {items.map((vitamin) => (
+              {visibleItems.map((vitamin) => (
                 <option key={vitamin.id} value={vitamin.id}>
-                  {vitamin.vitaminNameHe}
+                  {firstNonEmptyString(resolveDisplayNameHe(vitamin), resolveVitaminNameEn(vitamin), vitamin.id)}
                 </option>
               ))}
             </select>

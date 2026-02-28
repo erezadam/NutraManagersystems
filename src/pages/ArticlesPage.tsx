@@ -6,15 +6,24 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import StateView from '../components/ui/StateView';
 import { useEntityList } from '../hooks/useEntityList';
+import { asArray } from '../lib/arrays';
 import { formatDate } from '../lib/date';
 import { downloadText, toCsv } from '../lib/file-io';
 import { asOptionalString, parseImportFile } from '../lib/import-export';
-import { articleService } from '../services';
+import { articleService, foodService } from '../services';
 import type { Article } from '../types/entities';
+
+function labelsAsText(ids: string[] | undefined, nameById: Map<string, string>): string {
+  const labels = asArray(ids)
+    .map((id) => nameById.get(id) ?? id)
+    .sort((a, b) => a.localeCompare(b, 'he'));
+  return labels.join(', ');
+}
 
 export default function ArticlesPage() {
   const navigate = useNavigate();
   const { items, loading, error, reload } = useEntityList(articleService, 'created_date desc');
+  const foodsList = useEntityList(foodService, 'foodNameHe asc');
 
   const [query, setQuery] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
@@ -33,6 +42,8 @@ export default function ArticlesPage() {
         .some((value) => String(value).toLowerCase().includes(term))
     );
   }, [items, query]);
+
+  const foodNameById = useMemo(() => new Map(foodsList.items.map((food) => [food.id, food.foodNameHe || food.foodNameEn || food.id])), [foodsList.items]);
 
   async function onDelete() {
     if (!deleteTarget) return;
@@ -125,9 +136,14 @@ export default function ArticlesPage() {
         </button>
       </div>
 
-      <StateView loading={loading} error={error} empty={filtered.length === 0} emptyLabel="לא נמצאו מאמרים." />
+      <StateView
+        loading={loading || foodsList.loading}
+        error={error ?? foodsList.error}
+        empty={filtered.length === 0}
+        emptyLabel="לא נמצאו מאמרים."
+      />
 
-      {!loading && !error && filtered.length > 0 ? (
+      {!loading && !error && !foodsList.loading && filtered.length > 0 ? (
         <div className="panel table-wrap">
           <table className="data-table">
             <thead>
@@ -135,7 +151,7 @@ export default function ArticlesPage() {
                 <th>כותרת</th>
                 <th>כתובת</th>
                 <th>תקציר</th>
-                <th>קישור מזונות</th>
+                <th>מזונות</th>
                 <th>עודכן</th>
                 <th>פעולות</th>
               </tr>
@@ -150,7 +166,9 @@ export default function ArticlesPage() {
                   <td>
                     <ExpandableText value={article.summary} emptyLabel="-" popupTitle="תקציר" />
                   </td>
-                  <td>{article.foodIds?.length ?? 0}</td>
+                  <td>
+                    <ExpandableText value={labelsAsText(article.foodIds, foodNameById)} emptyLabel="-" popupTitle="מזונות" />
+                  </td>
                   <td>{formatDate(article.updated_date)}</td>
                   <td className="action-cell">
                     <button
@@ -211,9 +229,10 @@ export default function ArticlesPage() {
             <strong>תקציר:</strong>
             <ExpandableText value={detailTarget?.summary} emptyLabel="-" popupTitle="תקציר מאמר" />
           </div>
-          <p>
-            <strong>כמות מזונות:</strong> {detailTarget?.foodIds?.length ?? 0}
-          </p>
+          <div>
+            <strong>מזונות:</strong>
+            <ExpandableText value={labelsAsText(detailTarget?.foodIds, foodNameById)} emptyLabel="-" popupTitle="מזונות" />
+          </div>
         </div>
       </Modal>
     </section>

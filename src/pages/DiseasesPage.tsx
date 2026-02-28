@@ -5,16 +5,26 @@ import ExpandableText from '../components/ui/ExpandableText';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import StateView from '../components/ui/StateView';
+import { useEntityList } from '../hooks/useEntityList';
+import { asArray } from '../lib/arrays';
 import { formatDate } from '../lib/date';
 import { downloadText, toCsv } from '../lib/file-io';
 import { asOptionalString, parseImportFile } from '../lib/import-export';
-import { diseaseService } from '../services';
-import { useEntityList } from '../hooks/useEntityList';
+import { deficiencySymptomService, diseaseService, vitaminService } from '../services';
 import type { Disease } from '../types/entities';
+
+function labelsAsText(ids: string[] | undefined, nameById: Map<string, string>): string {
+  const labels = asArray(ids)
+    .map((id) => nameById.get(id) ?? id)
+    .sort((a, b) => a.localeCompare(b, 'he'));
+  return labels.join(', ');
+}
 
 export default function DiseasesPage() {
   const navigate = useNavigate();
   const { items, loading, error, reload } = useEntityList(diseaseService, 'created_date desc');
+  const vitaminsList = useEntityList(vitaminService, 'vitaminNameHe asc');
+  const symptomsList = useEntityList(deficiencySymptomService, 'symptomNameHe asc');
   const [query, setQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Disease | null>(null);
   const [busyDelete, setBusyDelete] = useState(false);
@@ -32,6 +42,16 @@ export default function DiseasesPage() {
         .some((value) => String(value).toLowerCase().includes(term))
     );
   }, [items, query]);
+
+  const vitaminNameById = useMemo(() => {
+    return new Map(
+      vitaminsList.items.map((vitamin) => [vitamin.id, vitamin.vitaminNameHe || vitamin.vitaminNameEn || vitamin.vitaminNickHe || vitamin.id])
+    );
+  }, [vitaminsList.items]);
+
+  const symptomNameById = useMemo(() => {
+    return new Map(symptomsList.items.map((symptom) => [symptom.id, symptom.symptomNameHe || symptom.symptomNameEn || symptom.id]));
+  }, [symptomsList.items]);
 
   async function removeDisease() {
     if (!deleteTarget) return;
@@ -123,9 +143,14 @@ export default function DiseasesPage() {
         </button>
       </div>
 
-      <StateView loading={loading} error={error} empty={filtered.length === 0} emptyLabel="לא נמצאו פרוטוקולים." />
+      <StateView
+        loading={loading || vitaminsList.loading || symptomsList.loading}
+        error={error ?? vitaminsList.error ?? symptomsList.error}
+        empty={filtered.length === 0}
+        emptyLabel="לא נמצאו פרוטוקולים."
+      />
 
-      {!loading && !error && filtered.length > 0 ? (
+      {!loading && !error && !vitaminsList.loading && !symptomsList.loading && filtered.length > 0 ? (
         <div className="panel table-wrap">
           <table className="data-table">
             <thead>
@@ -147,8 +172,20 @@ export default function DiseasesPage() {
                   <td>
                     <ExpandableText value={disease.diseaseCharacteristicsHe} emptyLabel="-" popupTitle="מאפיינים" />
                   </td>
-                  <td>{disease.supplementIds?.length ?? 0}</td>
-                  <td>{disease.deficiencySymptomIds?.length ?? 0}</td>
+                  <td>
+                    <ExpandableText
+                      value={labelsAsText(disease.supplementIds, vitaminNameById)}
+                      emptyLabel="-"
+                      popupTitle="תוספים"
+                    />
+                  </td>
+                  <td>
+                    <ExpandableText
+                      value={labelsAsText(disease.deficiencySymptomIds, symptomNameById)}
+                      emptyLabel="-"
+                      popupTitle="תסמינים"
+                    />
+                  </td>
                   <td>{formatDate(disease.updated_date)}</td>
                   <td className="action-cell">
                     <button
@@ -212,6 +249,14 @@ export default function DiseasesPage() {
           <div>
             <strong>הערות:</strong>
             <ExpandableText value={detailTarget?.notes} emptyLabel="-" popupTitle="הערות" />
+          </div>
+          <div>
+            <strong>תוספים:</strong>
+            <ExpandableText value={labelsAsText(detailTarget?.supplementIds, vitaminNameById)} emptyLabel="-" popupTitle="תוספים" />
+          </div>
+          <div>
+            <strong>תסמינים:</strong>
+            <ExpandableText value={labelsAsText(detailTarget?.deficiencySymptomIds, symptomNameById)} emptyLabel="-" popupTitle="תסמינים" />
           </div>
         </div>
       </Modal>
